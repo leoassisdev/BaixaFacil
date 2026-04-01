@@ -12,6 +12,12 @@ import os
 import re
 
 
+COMMON_BIN_PATHS = [
+    "/opt/homebrew/bin",   # Homebrew ARM (M1+)
+    "/usr/local/bin",      # Homebrew Intel
+    "/usr/bin",
+]
+
 QUALITY_AUDIO = {"Alta": "0", "Normal": "5", "Baixa": "9"}
 QUALITY_VIDEO_SORT = {
     "Alta": "res",
@@ -32,9 +38,12 @@ class BaixaFacil(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.downloading = False
+        self.ffmpeg_path = self._find_binary("ffmpeg")
         self.yt_dlp_path = self._find_yt_dlp()
 
-        self._check_dependencies()
+        if not self.ffmpeg_path:
+            self._setup_ffmpeg()
+
         self._build_ui()
 
     # ── UI ───────────────────────────────────────────────────────────────
@@ -175,6 +184,17 @@ class BaixaFacil(ctk.CTk):
 
     # ── Dependency checks ────────────────────────────────────────────────
 
+    @staticmethod
+    def _find_binary(name):
+        found = shutil.which(name)
+        if found:
+            return found
+        for p in COMMON_BIN_PATHS:
+            candidate = os.path.join(p, name)
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
     def _find_yt_dlp(self):
         # PyInstaller --onedir bundle
         if getattr(sys, "frozen", False):
@@ -192,17 +212,71 @@ class BaixaFacil(ctk.CTk):
         venv_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "yt-dlp")
         if os.path.isfile(venv_bin):
             return venv_bin
-        # System
-        sys_bin = shutil.which("yt-dlp")
-        return sys_bin or "yt-dlp"
+        # System / common paths
+        return self._find_binary("yt-dlp") or "yt-dlp"
 
-    def _check_dependencies(self):
-        if not shutil.which("ffmpeg"):
-            messagebox.showwarning(
-                "ffmpeg não encontrado",
-                "O ffmpeg é necessário para converter áudios e mesclar vídeos.\n\n"
-                "Instale com:  brew install ffmpeg",
+    def _setup_ffmpeg(self):
+        brew = self._find_binary("brew")
+        if brew:
+            resp = messagebox.askyesno(
+                "Configuração inicial",
+                "O BaixaFácil precisa do ffmpeg para funcionar.\n\n"
+                "Deseja instalar automaticamente via Homebrew?\n"
+                "(Pode levar alguns minutos na primeira vez)",
             )
+            if resp:
+                self._install_ffmpeg(brew)
+                return
+        messagebox.showwarning(
+            "ffmpeg necessário",
+            "O ffmpeg é necessário para o BaixaFácil funcionar.\n\n"
+            "Abra o Terminal e execute:\n"
+            "brew install ffmpeg\n\n"
+            "Se não tiver o Homebrew, acesse: https://brew.sh",
+        )
+
+    def _install_ffmpeg(self, brew_path):
+        win = ctk.CTkToplevel(self)
+        win.title("Instalando ffmpeg...")
+        win.geometry("400x150")
+        win.resizable(False, False)
+        win.grab_set()
+
+        ctk.CTkLabel(
+            win, text="Instalando ffmpeg...",
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(pady=(25, 5))
+
+        status = ctk.CTkLabel(win, text="Isso pode levar alguns minutos.", font=ctk.CTkFont(size=13))
+        status.pack(pady=(0, 10))
+
+        bar = ctk.CTkProgressBar(win, width=350)
+        bar.pack(pady=(0, 15))
+        bar.configure(mode="indeterminate")
+        bar.start()
+
+        def run():
+            try:
+                proc = subprocess.run(
+                    [brew_path, "install", "ffmpeg"],
+                    capture_output=True, text=True, timeout=600,
+                )
+                if proc.returncode == 0:
+                    self.ffmpeg_path = self._find_binary("ffmpeg")
+                    self.after(0, lambda: self._install_done(win, True))
+                else:
+                    self.after(0, lambda: self._install_done(win, False))
+            except Exception:
+                self.after(0, lambda: self._install_done(win, False))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _install_done(self, win, success):
+        win.destroy()
+        if success:
+            messagebox.showinfo("Pronto!", "ffmpeg instalado com sucesso!\nO BaixaFácil está pronto para uso.")
+        else:
+            messagebox.showerror("Erro", "Falha ao instalar o ffmpeg.\n\nTente manualmente no Terminal:\nbrew install ffmpeg")
 
     # ── Download logic ───────────────────────────────────────────────────
 
@@ -241,6 +315,9 @@ class BaixaFacil(ctk.CTk):
         is_playlist = mode.startswith("playlist")
 
         cmd = [self.yt_dlp_path]
+
+        if self.ffmpeg_path:
+            cmd += ["--ffmpeg-location", os.path.dirname(self.ffmpeg_path)]
 
         if is_audio:
             cmd += [
