@@ -7,6 +7,7 @@ import subprocess
 import threading
 import webbrowser
 import shutil
+import sys
 import os
 import re
 
@@ -175,9 +176,23 @@ class BaixaFacil(ctk.CTk):
     # ── Dependency checks ────────────────────────────────────────────────
 
     def _find_yt_dlp(self):
+        # PyInstaller --onedir bundle
+        if getattr(sys, "frozen", False):
+            app_dir = os.path.dirname(sys.executable)
+            bundled = os.path.join(app_dir, "yt-dlp")
+            if os.path.isfile(bundled):
+                return bundled
+        # PyInstaller --onefile bundle
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled = os.path.join(meipass, "yt-dlp")
+            if os.path.isfile(bundled):
+                return bundled
+        # Dev: venv
         venv_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "yt-dlp")
         if os.path.isfile(venv_bin):
             return venv_bin
+        # System
         sys_bin = shutil.which("yt-dlp")
         return sys_bin or "yt-dlp"
 
