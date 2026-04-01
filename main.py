@@ -12,10 +12,10 @@ import re
 
 
 QUALITY_AUDIO = {"Alta": "0", "Normal": "5", "Baixa": "9"}
-QUALITY_VIDEO = {
-    "Alta": "res,vcodec:h264,acodec:aac",
+QUALITY_VIDEO_SORT = {
+    "Alta": "res",
     "Normal": "res:720,vcodec:h264,acodec:aac",
-    "Baixa": "res:480,vcodec:h264,acodec:aac",
+    "Baixa": "+res,vcodec:h264,acodec:aac",
 }
 
 
@@ -234,11 +234,13 @@ class BaixaFacil(ctk.CTk):
                 "-o", os.path.join(dest, "%(title)s.%(ext)s"),
             ]
         else:
-            cmd += [
-                "-P", dest,
-                "-S", QUALITY_VIDEO[quality],
-                "--merge-output-format", "mp4",
-            ]
+            cmd += ["-P", dest, "-S", QUALITY_VIDEO_SORT[quality]]
+            if quality == "Alta":
+                cmd.append("--recode-video")
+                cmd.append("mp4")
+            else:
+                cmd.append("--merge-output-format")
+                cmd.append("mp4")
 
         cmd.append("--yes-playlist" if is_playlist else "--no-playlist")
         cmd.append(url)
