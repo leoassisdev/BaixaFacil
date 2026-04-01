@@ -13,9 +13,9 @@ import re
 
 QUALITY_AUDIO = {"Alta": "0", "Normal": "5", "Baixa": "9"}
 QUALITY_VIDEO = {
-    "Alta": "bv*+ba/b",
-    "Normal": "bv*[height<=720]+ba/b[height<=720]",
-    "Baixa": "bv*[height<=480]+ba/b[height<=480]",
+    "Alta": "res,vcodec:h264,acodec:aac",
+    "Normal": "res:720,vcodec:h264,acodec:aac",
+    "Baixa": "res:480,vcodec:h264,acodec:aac",
 }
 
 
@@ -23,7 +23,7 @@ class BaixaFacil(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("BaixaFacil")
+        self.title("BaixaFácil")
         self.geometry("740x600")
         self.resizable(False, False)
 
@@ -43,10 +43,20 @@ class BaixaFacil(ctk.CTk):
         hdr = ctk.CTkFrame(self, fg_color="transparent")
         hdr.pack(fill="x", padx=30, pady=(25, 0))
 
+        title_frame = ctk.CTkFrame(hdr, fg_color="transparent")
+        title_frame.pack(anchor="w")
+
         ctk.CTkLabel(
-            hdr, text="BaixaFacil",
+            title_frame, text="Baixa",
             font=ctk.CTkFont(size=30, weight="bold"),
-        ).pack(anchor="w")
+            text_color="#FF1744",
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            title_frame, text="Fácil",
+            font=ctk.CTkFont(size=30, weight="bold"),
+            text_color="#EAEAFF",
+        ).pack(side="left")
 
         ctk.CTkLabel(
             hdr, text="Baixe áudios e vídeos do YouTube",
@@ -226,7 +236,7 @@ class BaixaFacil(ctk.CTk):
         else:
             cmd += [
                 "-P", dest,
-                "-f", QUALITY_VIDEO[quality],
+                "-S", QUALITY_VIDEO[quality],
                 "--merge-output-format", "mp4",
             ]
 
@@ -280,8 +290,8 @@ class BaixaFacil(ctk.CTk):
         self.progress.configure(mode="determinate")
         self.progress.set(1.0)
         self._set_status(f"Concluído! Salvo em: {dest}", "#2FA572")
+        subprocess.run(["open", dest])
         messagebox.showinfo("Sucesso!", f"Download concluído!\n\nSalvo em:\n{dest}")
-        subprocess.Popen(["open", dest])
         self.progress.set(0)
         self._set_status("Pronto para baixar")
 
