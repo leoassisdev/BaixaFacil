@@ -53,6 +53,11 @@ jobs:
           pip install -r requirements.txt pyinstaller pillow
 
       - name: Baixar ffmpeg e ffprobe desta plataforma
+        # O token do proprio Actions sobe o limite da API do GitHub de 60 pra
+        # 1000 req/hora. Sem ele os tres jobs paralelos estouram a cota e o
+        # build morre com 403.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/baixar_ffmpeg.py
 
       - name: Empacotar

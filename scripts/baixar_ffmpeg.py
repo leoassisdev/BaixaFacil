@@ -24,6 +24,7 @@ import os
 import platform
 import shutil
 import sys
+import urllib.error
 import urllib.request
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,10 +52,37 @@ def plataforma_atual() -> str:
 
 
 def assets_do_release() -> dict:
-    with urllib.request.urlopen(API, timeout=60) as r:
-        import json
-        dados = json.load(r)
-    print(f"  release ffmpeg-static: {dados['tag_name']}")
+    """Consulta o release. Usa token se houver GITHUB_TOKEN/GH_TOKEN no ambiente.
+
+    Sem autenticacao a API do GitHub da 60 requisicoes por hora POR IP. No CI,
+    os tres jobs saem de IPs compartilhados do GitHub Actions e a cota estoura,
+    derrubando o build com HTTP 403 (medido em 17/08/2026). O token do proprio
+    Actions resolve e sobe o limite pra 1000/hora.
+    """
+    import json
+
+    cabecalhos = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "baixafacil-build",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        cabecalhos["Authorization"] = f"Bearer {token}"
+
+    pedido = urllib.request.Request(API, headers=cabecalhos)
+    try:
+        with urllib.request.urlopen(pedido, timeout=60) as r:
+            dados = json.load(r)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429):
+            raise SystemExit(
+                "\nERRO: a API do GitHub recusou por limite de requisicoes "
+                f"(HTTP {exc.code}).\nDefina GITHUB_TOKEN no ambiente e rode de novo.\n"
+            ) from exc
+        raise
+
+    print(f"  release ffmpeg-static: {dados['tag_name']}  "
+          f"({'autenticado' if token else 'sem token'})")
     return {a["name"]: a["browser_download_url"] for a in dados["assets"]}
 
 
