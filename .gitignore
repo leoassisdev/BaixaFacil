@@ -1,4 +1,29 @@
+# Ambientes
 venv/
+.venv/
 __pycache__/
 *.pyc
+
+# Saida de build
+build/
+dist/
+*.spec.bak
+
+# Binarios do ffmpeg: NAO vao pro git (sao ~90 MB por plataforma).
+# Quem builda roda `python3 scripts/baixar_ffmpeg.py`, que os busca na hora.
+recursos/bin/
+
+# Instaladores. Ate 17/08/2026 dois DMGs estavam COMMITADOS no repo (21 MB),
+# e um deles carregava o bug do yt-dlp com shebang do venv da maquina do Leo.
+# Instalador agora sai por Release do GitHub, nunca versionado.
+*.dmg
+*.exe
+*.zip
+*.pkg
+
+# Lixo do macOS / exFAT
 .DS_Store
+._*
+
+# Lei 00-g: cofre de segredos nunca sobe
+.cofre/

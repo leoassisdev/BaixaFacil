@@ -1,0 +1,97 @@
+# Gera os instaladores do BaixaFácil nas 3 plataformas e publica no Release.
+#
+# Por que CI e não a máquina do Leo: o PyInstaller NÃO faz build cruzado. Mac
+# arm64 só gera mac arm64. Pra ter mac Intel e Windows sem ter as três
+# máquinas, cada job roda no runner correspondente.
+#
+# Repo público = minutos de Actions gratuitos. Este workflow roda só quando
+# alguém publica uma tag, nunca em agendamento: nada de keep-alive queimando
+# cota (ver a regra do budget zero no GitHub Actions).
+
+name: Build e publicar
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:   # permite disparar na mão pelo painel do GitHub
+
+permissions:
+  contents: write      # necessário pra criar o Release
+
+jobs:
+  empacotar:
+    name: ${{ matrix.rotulo }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false     # um alvo quebrado não derruba os outros
+      matrix:
+        include:
+          - rotulo: macOS Apple Silicon
+            runner: macos-14        # runner arm64
+            alvo: mac-arm64
+          - rotulo: macOS Intel
+            runner: macos-13        # runner x86_64
+            alvo: mac-x64
+          - rotulo: Windows x64
+            runner: windows-latest
+            alvo: win-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pillow
+
+      - name: Baixar ffmpeg e ffprobe desta plataforma
+        run: python scripts/baixar_ffmpeg.py
+
+      - name: Empacotar
+        run: pyinstaller --noconfirm --clean BaixaFacil.spec
+
+      # O teste que importa: roda o app JÁ EMPACOTADO e baixa de verdade.
+      # É o que impede o bug do "yt-dlp não encontrado" de voltar sem ninguém ver.
+      - name: Testar download dentro do app empacotado (macOS)
+        if: runner.os == 'macOS'
+        run: ./dist/BaixaFacil.app/Contents/MacOS/BaixaFacil --diagnostico --baixar-teste
+
+      - name: Testar download dentro do app empacotado (Windows)
+        if: runner.os == 'Windows'
+        run: .\dist\BaixaFacil\BaixaFacil.exe --diagnostico --baixar-teste
+
+      - name: Montar DMG (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -volname "BaixaFacil" -srcfolder dist/BaixaFacil.app \
+            -ov -format UDZO "BaixaFacil-${{ matrix.alvo }}.dmg"
+
+      - name: Montar ZIP (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist\BaixaFacil\* -DestinationPath "BaixaFacil-${{ matrix.alvo }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BaixaFacil-${{ matrix.alvo }}
+          path: |
+            BaixaFacil-*.dmg
+            BaixaFacil-*.zip
+
+  publicar:
+    name: Publicar Release
+    needs: empacotar
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artefatos/**/*
+          generate_release_notes: true
