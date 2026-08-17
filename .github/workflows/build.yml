@@ -30,7 +30,11 @@ jobs:
             runner: macos-14        # runner arm64
             alvo: mac-arm64
           - rotulo: macOS Intel
-            runner: macos-13        # runner x86_64
+            # macos-13 foi APOSENTADO pelo GitHub: o job fica eternamente em
+            # "queued", sem runner, e trava a publicacao do Release inteiro
+            # (medido em 17/08/2026, esperou 10 min sem sair da fila).
+            # macos-15-intel e a imagem x86_64 atual.
+            runner: macos-15-intel
             alvo: mac-x64
           - rotulo: Windows x64
             runner: windows-latest
